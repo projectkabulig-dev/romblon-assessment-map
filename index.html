@@ -685,6 +685,7 @@ section{border-top:1px solid var(--line);padding-top:2px}
 section:first-of-type{border-top:0}
 label{display:block;font-weight:600;margin:10px 0 4px}
 select,input[type=search]{width:100%;font:inherit;color:var(--ink);padding:8px 10px;border:1px solid #a9b9b6;border-radius:6px;background:#fff}
+input[type=range]{width:100%;accent-color:var(--r4);margin:2px 0 0}
 select:focus-visible,input:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #e8a317;outline-offset:1px}
 .checks{display:grid;gap:2px;margin-top:6px}
 .checks label{display:flex;align-items:center;gap:8px;font-weight:400;margin:0;padding:5px 2px;cursor:pointer}
@@ -763,6 +764,9 @@ details ul{padding-left:18px;margin:0 0 8px}
         <label><input type="checkbox" id="cLabels" checked> Pangalan ng munisipyo</label>
         <label><input type="checkbox" id="cBrgy"> Hangganan ng barangay</label>
       </div>
+      <label for="rOp">Linaw ng kulay ng munisipyo</label>
+      <input type="range" id="rOp" min="15" max="100" step="5" value="95" aria-describedby="opHelp">
+      <p class="small" id="opHelp">Ibaba ito para makita ang larawan ng isla sa ilalim ng kulay.</p>
       <label>Background ng mapa</label>
       <div class="radios" role="radiogroup" aria-label="Background ng mapa">
         <label><input type="radio" name="base" value="plain" checked> Payak</label>
@@ -838,7 +842,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 /* ---------- catalog ---------- */
 const VARS = {};
 for (const g of D.groups) for (const v of g.variants) { v.group = g.id; v.groupLabel = g.label; VARS[v.key] = v; }
-const state = { group: 'rma', variant: 'rma_level_most_common', choro: true, dots: true, labels: true, brgy: false, base: 'plain', district: '' };
+const state = { group: 'rma', variant: 'rma_level_most_common', choro: true, dots: true, labels: true, brgy: false, base: 'plain', district: '', op: null };
+const opacityNow = () => state.op != null ? state.op : ({ plain: .95, light: .7, sat: .45 })[state.base];
 
 /* ---------- map ---------- */
 const map = L.map('map', { zoomSnap: .25, zoomDelta: .5, preferCanvas: true });
@@ -862,6 +867,7 @@ function setBase(name) {
   if (currentBase) currentBase.addTo(map).bringToBack();
   $('map').classList.toggle('sat', name === 'sat');
   state.base = name;
+  if (state.op == null) $('rOp').value = Math.round(opacityNow() * 100);
   restyle();
 }
 
@@ -925,7 +931,7 @@ function muniStyle(name) {
   const on = state.choro;
   const fill = st && on ? colorOf(st.val, muniCuts) : (on ? NODATA : '#ffffff');
   const sat = state.base === 'sat';
-  return { fillColor: fill, fillOpacity: !on ? (sat ? 0 : .25) : (state.base === 'plain' ? .95 : .78),
+  return { fillColor: fill, fillOpacity: !on ? (sat ? 0 : .25) : opacityNow(),
     color: sat ? '#ffffff' : '#12303b', weight: 1.2, opacity: sat ? .9 : .65 };
 }
 
@@ -1072,6 +1078,7 @@ $('cChoro').onchange = e => { state.choro = e.target.checked; restyle(); };
 $('cDots').onchange = e => { state.dots = e.target.checked; if (e.target.checked) dotsLayer.addTo(map); else map.removeLayer(dotsLayer); };
 $('cLabels').onchange = e => { state.labels = e.target.checked; e.target.checked ? labelLayer.addTo(map) : map.removeLayer(labelLayer); };
 $('cBrgy').onchange = e => { state.brgy = e.target.checked; e.target.checked ? brgyLayer.addTo(map) : map.removeLayer(brgyLayer); };
+$('rOp').oninput = e => { state.op = e.target.value / 100; muniLayer.setStyle(f => muniStyle(f.properties.adm3_name)); };
 document.querySelectorAll('input[name=base]').forEach(r => r.onchange = e => setBase(e.target.value));
 
 $('schoolList').innerHTML = D.schools.map(s => '<option value="' + esc(s.n) + '"></option>').join('');
