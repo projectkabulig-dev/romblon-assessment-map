@@ -729,6 +729,13 @@ details ul{padding-left:18px;margin:0 0 8px}
 .pp .g{font-weight:650;margin:6px 0 2px}
 .pp .kv{display:flex;justify-content:space-between;gap:10px;padding:1px 0}
 .pp .kv span:last-child{font-variant-numeric:tabular-nums;text-align:right}
+.sname{white-space:nowrap}
+.sname span{position:absolute;transform:translate(9px,-50%);max-width:190px;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:11.5px;color:#12303b;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff;pointer-events:none}
+.sname.nodata span{font-weight:400;color:#46606a}
+#map.sat .sname span{color:#fff;text-shadow:0 0 3px #000,0 0 3px #000,0 0 2px #000}
+.plist button{grid-template-columns:minmax(0,1fr) auto}
+.linkbtn{all:unset;color:#0d5f7a;text-decoration:underline;cursor:pointer;margin-top:6px;display:inline-block}
+.linkbtn:focus-visible{outline:3px solid #e8a317}
 @media (max-width:860px){
   .app{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto;min-height:100vh}
   #map{order:-1;height:62vh}
@@ -762,8 +769,10 @@ details ul{padding-left:18px;margin:0 0 8px}
         <label><input type="checkbox" id="cChoro" checked> Kulay ng munisipyo</label>
         <label><input type="checkbox" id="cDots" checked> Mga paaralan</label>
         <label><input type="checkbox" id="cLabels" checked> Pangalan ng munisipyo</label>
+        <label><input type="checkbox" id="cNames" checked> Pangalan ng paaralan</label>
         <label><input type="checkbox" id="cBrgy"> Hangganan ng barangay</label>
       </div>
+      <p class="small" style="margin:6px 0 0">Lumalabas ang pangalan ng paaralan kapag nag-zoom ka nang malapit, o kapag pumili ka ng munisipyo.</p>
       <label for="rOp">Linaw ng kulay ng munisipyo</label>
       <input type="range" id="rOp" min="15" max="100" step="5" value="95" aria-describedby="opHelp">
       <p class="small" id="opHelp">Ibaba ito para makita ang larawan ng isla sa ilalim ng kulay.</p>
@@ -780,10 +789,16 @@ details ul{padding-left:18px;margin:0 0 8px}
       <h2>Hanapin</h2>
       <label for="selDist">District</label>
       <select id="selDist"></select>
+      <label for="selMuni">Munisipyo</label>
+      <select id="selMuni"></select>
       <label for="search">Paaralan</label>
       <input type="search" id="search" list="schoolList" placeholder="I-type ang pangalan ng paaralan" autocomplete="off">
       <datalist id="schoolList"></datalist>
       <div class="status" id="status" role="status"></div>
+      <div id="muniBox" hidden>
+        <h2 id="muniTitle" style="margin-top:16px"></h2>
+        <ul class="rank plist" id="muniList"></ul>
+      </div>
     </section>
 
     <section>
@@ -842,7 +857,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 /* ---------- catalog ---------- */
 const VARS = {};
 for (const g of D.groups) for (const v of g.variants) { v.group = g.id; v.groupLabel = g.label; VARS[v.key] = v; }
-const state = { group: 'rma', variant: 'rma_level_most_common', choro: true, dots: true, labels: true, brgy: false, base: 'plain', district: '', op: null };
+const state = { group: 'rma', variant: 'rma_level_most_common', choro: true, dots: true, labels: true, brgy: false, base: 'plain', district: '', op: null, names: true, muni: '' };
 const opacityNow = () => state.op != null ? state.op : ({ plain: .95, light: .7, sat: .45 })[state.base];
 
 /* ---------- map ---------- */
@@ -875,11 +890,13 @@ function setBase(name) {
 const muniTotal = {};
 for (const s of D.schools) muniTotal[s.m] = (muniTotal[s.m] || 0) + 1;
 
+const muniLayers = {};
 let muniStat = {}, muniCuts = [], dotCuts = [];
 const muniLayer = L.geoJSON(ADM3, {
   style: f => muniStyle(f.properties.adm3_name),
   onEachFeature: (f, layer) => {
     const name = f.properties.adm3_name;
+    muniLayers[name] = layer;
     layer.bindTooltip(() => muniText(name), { sticky: true });
     layer.on('mouseover', () => layer.setStyle({ weight: 2.5, color: '#b87300' }));
     layer.on('mouseout', () => muniLayer.resetStyle(layer));
@@ -931,8 +948,9 @@ function muniStyle(name) {
   const on = state.choro;
   const fill = st && on ? colorOf(st.val, muniCuts) : (on ? NODATA : '#ffffff');
   const sat = state.base === 'sat';
+  const sel = name === state.muni;
   return { fillColor: fill, fillOpacity: !on ? (sat ? 0 : .25) : opacityNow(),
-    color: sat ? '#ffffff' : '#12303b', weight: 1.2, opacity: sat ? .9 : .65 };
+    color: sel ? '#b87300' : (sat ? '#ffffff' : '#12303b'), weight: sel ? 3.2 : 1.2, opacity: sel ? 1 : (sat ? .9 : .65) };
 }
 
 /* ---------- compute + render ---------- */
@@ -960,7 +978,7 @@ let markers = {};
 function buildDots(v) {
   dotsLayer.clearLayers(); markers = {};
   const stroke = state.base === 'sat' ? '#ffffff' : '#12303b';
-  const list = D.schools.filter(s => s.x != null && (!state.district || s.d === state.district));
+  const list = D.schools.filter(s => s.x != null && (!state.district || s.d === state.district) && (!state.muni || s.m === state.muni));
   list.sort((a, b) => (a.v[v.key] === undefined ? 0 : 1) - (b.v[v.key] === undefined ? 0 : 1));
   for (const s of list) {
     const x = s.v[v.key], has = x !== undefined;
@@ -971,6 +989,38 @@ function buildDots(v) {
     markers[s.i] = m; dotsLayer.addLayer(m);
   }
   if (!state.dots) map.removeLayer(dotsLayer); else if (!map.hasLayer(dotsLayer)) dotsLayer.addTo(map);
+}
+
+const nameLayer = L.layerGroup().addTo(map);
+function buildNames() {
+  nameLayer.clearLayers();
+  if (!state.names) return;
+  const z = map.getZoom();
+  if (!(state.muni || (state.district && z >= 11.5) || z >= 12.5)) return;
+  const v = VARS[state.variant], bounds = map.getBounds();
+  for (const s of D.schools) {
+    if (s.x == null) continue;
+    if (state.district && s.d !== state.district) continue;
+    if (state.muni && s.m !== state.muni) continue;
+    if (!state.muni && !bounds.contains([s.y, s.x])) continue;
+    const has = s.v[v.key] !== undefined;
+    nameLayer.addLayer(L.marker([s.y, s.x], { pane: 'labelPane', interactive: false, keyboard: false,
+      icon: L.divIcon({ className: 'sname' + (has ? '' : ' nodata'), html: '<span>' + esc(s.n) + '</span>', iconSize: null }) }));
+  }
+}
+function renderMuniList(v) {
+  const box = $('muniBox');
+  if (!state.muni) { box.hidden = true; return; }
+  const list = D.schools.filter(s => s.m === state.muni).sort((a, b) => {
+    const xa = a.v[v.key], xb = b.v[v.key];
+    if (xa === undefined && xb === undefined) return a.n.localeCompare(b.n);
+    if (xa === undefined) return 1; if (xb === undefined) return -1;
+    return xb - xa || a.n.localeCompare(b.n);
+  });
+  $('muniTitle').textContent = 'Mga paaralan sa ' + state.muni + ' (' + list.length + ')';
+  $('muniList').innerHTML = list.map(s => { const x = s.v[v.key];
+    return '<li><button type="button" data-i="' + s.i + '" title="' + (s.x == null ? 'Walang tamang lokasyon sa mapa' : 'I-zoom sa paaralan') + '"><span class="nm">' + esc(s.n) + (s.x == null ? ' (wala sa mapa)' : '') + '</span><span class="val">' + esc(x === undefined ? 'Walang datos' : fmt(v, x)) + '</span></button></li>'; }).join('');
+  box.hidden = false;
 }
 
 function renderLegend(v, vals) {
@@ -1023,7 +1073,7 @@ function restyle() { muniLayer.setStyle(f => muniStyle(f.properties.adm3_name));
 function refresh() {
   const { v, byD, vals } = compute();
   muniLayer.setStyle(f => muniStyle(f.properties.adm3_name));
-  buildDots(v); renderLegend(v, vals); renderRank(v, byD);
+  buildDots(v); buildNames(); renderMuniList(v); renderLegend(v, vals); renderRank(v, byD);
 }
 
 /* ---------- popups ---------- */
@@ -1045,9 +1095,7 @@ function schoolPopup(s) {
 }
 muniLayer.eachLayer(l => l.on('click', e => {
   const name = l.feature.properties.adm3_name;
-  const st = muniStat[name], v = VARS[state.variant];
-  const line = st ? st.val.toFixed(1) + muniUnit(v) + ' (' + esc(muniMetric(v).toLowerCase()) + '), mula sa ' + st.n + ' ng ' + muniTotal[name] + ' paaralan' : 'Walang datos sa sukat na ito';
-  L.popup().setLatLng(e.latlng).setContent('<div class="pp"><strong>' + esc(name) + '</strong><div class="sub">' + line + '</div></div>').openOn(map);
+  L.popup().setLatLng(e.latlng).setContent('<div class="pp"><strong>' + esc(name) + '</strong><div class="sub">' + esc(muniText(name).replace(/<[^>]+>/g, ' ').replace(name, '').trim()) + '</div><button type="button" class="linkbtn pickmuni" data-m="' + esc(name) + '">Ilista ang mga paaralan</button></div>').openOn(map);
 }));
 
 /* ---------- controls ---------- */
@@ -1063,19 +1111,40 @@ $('selGroup').onchange = e => { state.group = e.target.value; state.variant = D.
 $('selVar').onchange = e => { state.variant = e.target.value; refresh(); };
 
 $('selDist').innerHTML = '<option value="">Lahat ng district</option>' + D.districts.map(d => '<option>' + esc(d) + '</option>').join('');
-function fitDistrict() {
+function fitView() {
+  if (state.muni && muniLayers[state.muni]) { map.fitBounds(muniLayers[state.muni].getBounds(), { padding: [40, 40], maxZoom: 14 }); return; }
   const pts = D.schools.filter(s => s.x != null && (!state.district || s.d === state.district)).map(s => [s.y, s.x]);
   if (state.district && pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 13 });
   else map.fitBounds(muniLayer.getBounds(), { padding: [20, 20] });
 }
 function setDistrict(d) {
-  state.district = d; $('selDist').value = d; refresh(); fitDistrict();
+  state.district = d; $('selDist').value = d;
+  if (d) { state.muni = ''; $('selMuni').value = ''; }
+  muniLayer.setStyle(f => muniStyle(f.properties.adm3_name));
+  refresh(); fitView();
+}
+function setMuni(m) {
+  state.muni = m; $('selMuni').value = m;
+  if (m) { state.district = ''; $('selDist').value = ''; }
+  muniLayer.setStyle(f => muniStyle(f.properties.adm3_name));
+  refresh(); fitView();
 }
 $('selDist').onchange = e => setDistrict(e.target.value);
+$('selMuni').innerHTML = '<option value="">Lahat ng munisipyo</option>' + [...D.munis].sort().map(m => '<option value="' + esc(m) + '">' + esc(m) + ' (' + (muniTotal[m] || 0) + ')</option>').join('');
+$('selMuni').onchange = e => setMuni(e.target.value);
+document.addEventListener('click', e => { const b = e.target.closest('.pickmuni'); if (b) { map.closePopup(); setMuni(b.dataset.m); } });
+$('muniList').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const s = D.schools.find(x => String(x.i) === b.dataset.i); if (!s) return;
+  if (s.x == null) { $('status').textContent = s.n + ' ay walang tamang lokasyon, kaya wala sa mapa.'; return; }
+  $('status').textContent = ''; map.setView([s.y, s.x], 15);
+  const m = markers[s.i]; if (m) setTimeout(() => m.openPopup(), 150);
+});
 $('rank').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setDistrict(state.district === b.dataset.d ? '' : b.dataset.d); });
 
 $('cChoro').onchange = e => { state.choro = e.target.checked; restyle(); };
 $('cDots').onchange = e => { state.dots = e.target.checked; if (e.target.checked) dotsLayer.addTo(map); else map.removeLayer(dotsLayer); };
+$('cNames').onchange = e => { state.names = e.target.checked; buildNames(); };
 $('cLabels').onchange = e => { state.labels = e.target.checked; e.target.checked ? labelLayer.addTo(map) : map.removeLayer(labelLayer); };
 $('cBrgy').onchange = e => { state.brgy = e.target.checked; e.target.checked ? brgyLayer.addTo(map) : map.removeLayer(brgyLayer); };
 $('rOp').oninput = e => { state.op = e.target.value / 100; muniLayer.setStyle(f => muniStyle(f.properties.adm3_name)); };
@@ -1088,12 +1157,13 @@ $('search').addEventListener('change', e => {
   const s = D.schools.find(x => x.n.toLowerCase() === q) || D.schools.find(x => x.n.toLowerCase().includes(q));
   if (!s) { $('status').textContent = 'Walang paaralang may ganitong pangalan.'; return; }
   if (s.x == null) { $('status').textContent = s.n + ' ay walang tamang lokasyon, kaya wala sa mapa. Tingnan ang listahan sa ilalim ng Tungkol sa datos.'; return; }
-  if (state.district && s.d !== state.district) { state.district = ''; $('selDist').value = ''; refresh(); }
+  if ((state.district && s.d !== state.district) || (state.muni && s.m !== state.muni)) { state.district = ''; state.muni = ''; $('selDist').value = ''; $('selMuni').value = ''; muniLayer.setStyle(f => muniStyle(f.properties.adm3_name)); refresh(); }
   if (!dotsLayer.getLayers().length || !map.hasLayer(dotsLayer)) { $('cDots').checked = true; state.dots = true; dotsLayer.addTo(map); }
   map.setView([s.y, s.x], 14);
   const m = markers[s.i]; if (m) setTimeout(() => m.openPopup(), 150);
 });
 
+map.on('moveend', buildNames);
 map.on('zoomend', () => { const r = radiusFor(map.getZoom()), v = VARS[state.variant]; for (const id in markers) { const m = markers[id]; const has = m.options.fillOpacity === 1; m.setRadius(has ? r : Math.max(2.5, r - 2)); } });
 
 /* unplaced list */
