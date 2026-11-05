@@ -1121,7 +1121,9 @@ D.__placedSnap = D.schools.filter(x => x.x != null).length;
 const map = L.map('map', { zoomSnap: .25, zoomDelta: .5, preferCanvas: true });
 map.attributionControl.setPrefix(false);
 map.attributionControl.addAttribution('Boundaries: PSA, NAMRIA, OCHA HDX');
-map.createPane('brgyPane').style.zIndex = 420;
+map.createPane('brgyPane').style.zIndex = 434;
+map.createPane('lnPane').style.zIndex = 436;
+map.getPane('lnPane').style.pointerEvents = 'none';
 map.createPane('hazPane').style.zIndex = 430;
 map.createPane('dotsPane').style.zIndex = 450;
 map.createPane('labelPane').style.zIndex = 470;
@@ -1156,9 +1158,13 @@ const muniLayer = L.geoJSON(ADM3, {
     layer.on('mouseout', () => muniLayer.resetStyle(layer));
   }
 }).addTo(map);
-map.createPane('provPane').style.zIndex = 425;
-const provHalo = L.geoJSON(PROV, { pane: 'provPane', interactive: false, style: { color: '#ffffff', weight: 7, opacity: .85, fill: false, lineJoin: 'round' } });
-const provLine = L.geoJSON(PROV, { pane: 'provPane', interactive: false, style: { color: '#0b1f27', weight: 4, opacity: 1, fill: false, lineJoin: 'round' } });
+function outlineStyle(name) {
+  const sat = state.base === 'sat', sel = name === state.muni;
+  return { fill: false, color: sel ? '#b87300' : (sat ? '#ffffff' : '#12303b'), weight: sel ? state.mw + 2 : state.mw, opacity: sel ? 1 : (sat ? .95 : .85) };
+}
+const muniOutline = L.geoJSON(ADM3, { pane: 'lnPane', interactive: false, style: f => outlineStyle(f.properties.adm3_name) }).addTo(map);
+const provHalo = L.geoJSON(PROV, { pane: 'lnPane', interactive: false, style: { color: '#ffffff', weight: 7, opacity: .85, fill: false, lineJoin: 'round' } });
+const provLine = L.geoJSON(PROV, { pane: 'lnPane', interactive: false, style: { color: '#0b1f27', weight: 4, opacity: 1, fill: false, lineJoin: 'round' } });
 const provLayer = L.layerGroup([provHalo, provLine]);
 function provStyle() {
   const sat = state.base === 'sat', w = state.mw + 1.8;
@@ -1243,7 +1249,7 @@ function muniStyle(name) {
   return { fillColor: fill, fillOpacity: !on ? (sat ? 0 : .25) : opacityNow(),
     color: sel ? '#b87300' : (sat ? '#ffffff' : '#12303b'), weight: sel ? state.mw + 2 : state.mw, opacity: sel ? 1 : (sat ? .95 : .85) };
 }
-const styleAll = () => muniLayer.setStyle(f => muniStyle(f.properties.adm3_name));
+const styleAll = () => { muniLayer.setStyle(f => muniStyle(f.properties.adm3_name)); muniOutline.setStyle(f => outlineStyle(f.properties.adm3_name)); };
 
 /* ---------- flags (priority) ---------- */
 const FLAGS = [
