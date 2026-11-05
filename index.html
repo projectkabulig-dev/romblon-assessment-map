@@ -715,6 +715,7 @@ details[open]>summary{border-bottom:1px solid var(--line);margin-bottom:8px}
 details p,details li{margin:0 0 8px}
 details ul{padding-left:18px;margin:0 0 8px}
 .status{min-height:20px;margin-top:6px;color:#8a3b00}
+.status.ok{color:#1b5e20}
 .unplaced{max-height:230px;overflow:auto;margin:0 0 8px}
 .unplaced div{padding:3px 0;border-bottom:1px solid var(--mist)}
 .mlabel{white-space:nowrap}
@@ -1732,7 +1733,7 @@ let dataMsg = '', dataDraft = null;
 function renderData() {
   const url = dataDraft !== null ? dataDraft : (live.mode === 'live' ? live.url : (getSaved() || DATA_URL));
   let h = '<p>' + (live.mode === 'live' ? 'Showing <b>live data</b> from your Google Sheet, updated ' + esc(new Date(live.updated).toLocaleString()) + '.' : 'Showing the <b>embedded snapshot</b> of ' + esc(D.snapshot) + '. Add your Google Sheet link to see updates without replacing this file.') + '</p>';
-  h += '<p class="small">' + D.schools.length + ' schools loaded.</p><div class="ctl noprint"><label>Google Apps Script web app link <input type="url" id="dataUrl" placeholder="https://script.google.com/macros/s/.../exec" value="' + esc(url) + '"></label><div class="row2"><button type="button" data-act="data-load">Load live data</button><button type="button" data-act="data-snap">Use embedded snapshot</button><button type="button" data-act="data-csv">Download current data as CSV</button></div><p class="status" id="dataMsg">' + esc(dataMsg) + '</p></div>';
+  h += '<p class="small">' + D.schools.length + ' schools loaded.</p><div class="ctl noprint"><label>Google Apps Script web app link <input type="url" id="dataUrl" placeholder="https://script.google.com/macros/s/.../exec" value="' + esc(url) + '"></label><div class="row2"><button type="button" data-act="data-load">Load live data</button><button type="button" data-act="data-snap">Use embedded snapshot</button><button type="button" data-act="data-csv">Download current data as CSV</button></div><p class="status' + (/^Loaded|^Using/.test(dataMsg) ? ' ok' : '') + '" id="dataMsg">' + esc(dataMsg) + '</p></div>';
   h += '<details open class="noprint"><summary>How to connect a Google Sheet</summary><ol><li>Upload romblon_map_data_template.xlsx to Google Drive and open it with Google Sheets (File > Save as Google Sheets). Keep row 1 headings unchanged.</li><li>In the Sheet, open Extensions > Apps Script, paste the contents of Code.gs, and save.</li><li>Click Deploy > New deployment, type Web app, Execute as Me, Who has access Anyone. Copy the web app link.</li><li>Paste the link above and click Load live data. The link is remembered in this browser. To make it permanent for everyone, put it in DATA_URL near the top of the script in this file, or share the map with ?data=LINK at the end of its address.</li><li>Edit or paste new results in the Sheet. Reload the map to see them.</li></ol><p class="small">Anyone who has the link can read the Sheet data through it, so it should hold only what you already show on this map.</p></details>';
   $('sheetBody').innerHTML = h;
 }
