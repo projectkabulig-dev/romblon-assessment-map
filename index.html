@@ -776,6 +776,13 @@ details ul{padding-left:18px;margin:0 0 8px}
 .tbl.cmp th[scope=row]{font-weight:600;white-space:nowrap}
 .muted{color:var(--ink2)}
 .nw{white-space:nowrap}
+.tabbtn{display:block;width:100%;margin-top:12px;font:inherit;font-weight:650;color:var(--r4);background:#fff;border:2px solid var(--r4);border-radius:8px;padding:9px 12px;cursor:pointer;text-align:left}
+.tabbtn:hover{background:var(--mist)}
+.tabbtn[aria-pressed=true]{background:var(--r4);color:#fff}
+.tabbtn:focus-visible{outline:3px solid #e8a317;outline-offset:2px}
+.heatpop .more{max-height:none;overflow:visible}
+.heatpop .cats{border-collapse:collapse;width:100%;font-size:12px;margin:4px 0}
+.heatpop .cats td{padding:3px 6px;vertical-align:top;border-bottom:1px solid var(--line)}
 .heat{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 14px;background:var(--mist)}
 .heat .hhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .hbody{display:flex;align-items:center;gap:10px;margin:6px 0 2px;flex-wrap:wrap}
@@ -833,10 +840,18 @@ details ul{padding-left:18px;margin:0 0 8px}
 
     <section>
       <h2>What to show</h2>
-      <label for="selGroup">Assessment</label>
-      <select id="selGroup"></select>
-      <label for="selVar">Measure</label>
-      <select id="selVar"></select>
+      <div id="resultsSel">
+        <label for="selGroup">Assessment</label>
+        <select id="selGroup"></select>
+        <label for="selVar">Measure</label>
+        <select id="selVar"></select>
+      </div>
+      <button type="button" class="tabbtn" id="tHeatMode" aria-pressed="false">Heat index</button>
+      <div id="heatPanel" hidden>
+        <p><b>Heat index by place.</b> Click a school or a municipality on the map. A box opens with an explanation and a button to PAGASA’s heat index map (iHeatMAP).</p>
+        <p class="small">PAGASA gives the heat index by place, not by school. For a school decision under DM 064, s. 2026, use the reading taken in the classroom (Tools &gt; Classroom heat index).</p>
+        <p class="small" id="heatPanelChips"></p>
+      </div>
     </section>
 
     <section>
@@ -851,7 +866,7 @@ details ul{padding-left:18px;margin:0 0 8px}
       <p class="small">Open a school or district profile from a school popup or the Compare table, then print it or save it as PDF.</p>
     </section>
 
-    <section>
+    <section id="secLegend">
       <h2>Legend</h2>
       <div class="legend" id="legend" aria-live="polite"></div>
       <p class="small" id="coverage"></p>
@@ -901,7 +916,7 @@ details ul{padding-left:18px;margin:0 0 8px}
       </div>
     </section>
 
-    <section>
+    <section id="secRank">
       <h2 id="rankTitle">District ranking</h2>
       <p class="small" id="rankSub"></p>
       <ul class="rank" id="rank"></ul>
@@ -1007,7 +1022,7 @@ function derive(v) {
   if (xs.length) v.dunt_avg = round1(mean(xs));
   if (v.ellna_numeracy_2026_mps !== undefined && v.ellna_numeracy_2024_mps !== undefined) v.d_ellna_num = round1(v.ellna_numeracy_2026_mps - v.ellna_numeracy_2024_mps);
 }
-const state = { ls: false, group: 'rma', variant: 'rma_level_most_common', choro: true, dots: true, labels: true, brgy: false, base: 'plain', district: '', op: null, names: true, muni: '', mw: 2.5, prov: true };
+const state = { heat: false, ls: false, group: 'rma', variant: 'rma_level_most_common', choro: true, dots: true, labels: true, brgy: false, base: 'plain', district: '', op: null, names: true, muni: '', mw: 2.5, prov: true };
 const prio = { mode: 'measure', pct: 20, lvl: 1, minFlags: 2, highlight: false, ids: new Set(), ignoreZero: true };
 const opacityNow = () => state.op != null ? state.op : ({ plain: .95, light: .7, sat: .45 })[state.base];
 
@@ -1223,7 +1238,7 @@ function muniLine(name) {
 function muniText(name) { return '<b>' + esc(name) + '</b><br>' + muniLine(name); }
 function muniStyle(name) {
   const v = VARS[state.variant], st = muniStat[name], on = state.choro;
-  const fill = st && on ? colorOf(st.val, muniCuts, rampOf(v)) : (on ? NODATA : '#ffffff');
+  const fill = state.heat ? '#e9efec' : (st && on ? colorOf(st.val, muniCuts, rampOf(v)) : (on ? NODATA : '#ffffff'));
   const sat = state.base === 'sat', sel = name === state.muni;
   return { fillColor: fill, fillOpacity: !on ? (sat ? 0 : .25) : opacityNow(),
     color: sel ? '#b87300' : (sat ? '#ffffff' : '#12303b'), weight: sel ? state.mw + 2 : state.mw, opacity: sel ? 1 : (sat ? .95 : .85) };
@@ -1302,7 +1317,7 @@ function compute() {
   dotCuts = v.fixedCuts || (v.type === 'level' ? [1, 2, 3, 4] : v.type === 'delta' ? DELTA_CUTS : quantCuts(vals));
   return { v, byD, vals };
 }
-function dotColor(v, x) { if (x === undefined) return NODATA; return v.type === 'level' ? RAMP[spread(x, (v.labels || LEVELS).length)] : colorOf(x, dotCuts, rampOf(v)); }
+function dotColor(v, x) { if (state.heat) return '#f2a33a'; if (x === undefined) return NODATA; return v.type === 'level' ? RAMP[spread(x, (v.labels || LEVELS).length)] : colorOf(x, dotCuts, rampOf(v)); }
 const radiusFor = z => z < 9 ? 3.5 : z < 11 ? 5 : z < 13 ? 6.5 : 8;
 let markers = {};
 const visibleSchool = s => s.x != null && (!state.district || s.d === state.district) && (!state.muni || s.m === state.muni);
@@ -1314,10 +1329,10 @@ function buildDots(v) {
   list.sort((a, b) => (a.v[v.key] === undefined ? 0 : 1) - (b.v[v.key] === undefined ? 0 : 1));
   for (const s of list) {
     const x = s.v[v.key], has = x !== undefined;
-    const m = L.circleMarker([s.y, s.x], { renderer: dotRenderer, radius: has ? radiusFor(z) : Math.max(2.5, radiusFor(z) - 2),
-      fillColor: dotColor(v, x), fillOpacity: has ? 1 : .8, color: stroke, weight: has ? 1.2 : .8 });
+    const m = L.circleMarker([s.y, s.x], { renderer: dotRenderer, radius: (has || state.heat) ? radiusFor(z) : Math.max(2.5, radiusFor(z) - 2),
+      fillColor: dotColor(v, x), fillOpacity: (has || state.heat) ? 1 : .8, color: stroke, weight: has ? 1.2 : .8 });
     m.bindPopup(() => schoolPopup(s), { maxWidth: 340 });
-    m.bindTooltip(esc(s.n) + (has ? ': ' + fmt(v, x) : ''), { direction: 'top', offset: [0, -4] });
+    m.bindTooltip(esc(s.n) + (has && !state.heat ? ': ' + fmt(v, x) : ''), { direction: 'top', offset: [0, -4] });
     markers[s.i] = m; dotsLayer.addLayer(m);
   }
   if (!state.dots) map.removeLayer(dotsLayer); else if (!map.hasLayer(dotsLayer)) dotsLayer.addTo(map);
@@ -1452,10 +1467,31 @@ function refresh() {
 
 /* ---------- popups ---------- */
 function chips(list, cls) { return list.map(t => '<span class="chip ' + (cls || '') + '">' + esc(t) + '</span>').join(''); }
+function heatPopup(m, s) {
+  const place = pagasaPlace({ m }), key = s ? s.i : 'm' + m.replace(/\W+/g, '');
+  let h = '<div class="pp heatpop"><strong>' + esc(s ? s.n : m) + '</strong>';
+  h += '<div class="sub">' + (s ? 'School ID ' + esc(s.i) + ', ' + esc(s.s) + '. ' + (s.b ? esc(s.b) + ', ' : '') + esc(s.m) + '. District: ' + esc(s.d) : 'Municipality') + '</div>';
+  h += '<div class="cur"><span>Heat index for <b>' + esc(place) + '</b></span></div>';
+  h += '<p style="margin:4px 0">PAGASA gives the heat index <b>by place</b>, hour by hour, in its iHeatMAP. It does not give a value for each school.</p>';
+  h += '<button type="button" class="mini" data-act="iheat" data-m="' + esc(m) + '" data-k="' + esc(key) + '">Open PAGASA iHeatMAP for ' + esc(place) + '</button>';
+  h += '<div class="sub" id="iheatmsg' + esc(key) + '">Opens PAGASA in a new tab and copies <b>' + esc(place) + '</b> so you can paste it in the search box.' + (s && s.x != null ? ' School location: ' + s.lat.toFixed(5) + ', ' + s.lon.toFixed(5) + '.' : '') + '</div>';
+  h += '<div class="more"><div class="g">What the heat index means for classes (DM 064, s. 2026)</div><table class="cats"><tbody>' + [...EIE].reverse().map(c => '<tr><td style="background:' + c.bg + ';color:' + c.fg + ';white-space:nowrap"><b>' + c.name + '</b><br>' + esc(c.range) + '</td><td>' + esc(c.modality) + '</td></tr>').join('') + '</tbody></table>';
+  h += '<p class="sub" style="margin:4px 0">The heat index measured in the classroom is the basis for school-level decisions, and extreme heat does not automatically result in class suspension. The school head decides with the SDS.</p></div>';
+  h += '<button type="button" class="linkbtn" data-act="open-class">Classroom heat index (DM 064)</button></div>';
+  return h;
+}
+function setHeatMode(on) {
+  state.heat = on; map.closePopup();
+  $('tHeatMode').setAttribute('aria-pressed', on); $('tHeatMode').textContent = on ? '\u2190 Back to results' : 'Heat index';
+  $('resultsSel').hidden = on; $('heatPanel').hidden = !on; $('secLegend').hidden = on; $('secRank').hidden = on;
+  $('heatPanelChips').innerHTML = on ? [...EIE].reverse().map(c => heatCatChip(c)).join(' ') : '';
+  refresh();
+}
 const IHEAT_URL = 'https://bagong.pagasa.dost.gov.ph/weather/heat-index';
 const pagasaPlace = s => String(s.m).replace(/\s*\([^)]*\)\s*/g, '').trim() + ', Romblon';
 const titleCase = t => String(t || '').toLowerCase().replace(/(^|[\s(-])([a-z\u00e0-\u00ff])/g, (m, a, b) => a + b.toUpperCase());
 function schoolPopup(s) {
+  if (state.heat) return heatPopup(s.m, s);
   const v = VARS[state.variant], x = s.v[v.key];
   let h = '<div class="pp"><strong>' + esc(s.n) + '</strong>';
   h += '<div class="sub">School ID ' + esc(s.i) + ', ' + esc(s.s) + '</div>';
@@ -1474,11 +1510,11 @@ function schoolPopup(s) {
   }
   if (s.nn && Object.keys(s.nn).length) more += '<div class="g">Number of test takers</div>' + Object.entries(s.nn).map(([k, n]) => '<div class="kv"><span>' + esc(k) + '</span><span>' + n + '</span></div>').join('');
   h += more ? '<div class="more">' + more + '</div>' : '<div class="sub">No results in the files received.</div>';
-  h += '<div class="heatlink"><button type="button" class="mini" data-act="iheat" data-i="' + s.i + '">Check the heat index on PAGASA iHeatMAP</button><div class="sub" id="iheatmsg' + s.i + '">Opens PAGASA in a new tab and copies <b>' + esc(pagasaPlace(s)) + '</b> to paste in its search box.</div></div>';
   return h + '<button type="button" class="linkbtn" data-act="profile-school" data-i="' + s.i + '">Open profile</button></div>';
 }
 muniLayer.eachLayer(l => l.on('click', e => {
   const name = l.feature.properties.adm3_name;
+  if (state.heat) { L.popup({ maxWidth: 340 }).setLatLng(e.latlng).setContent(heatPopup(name, null)).openOn(map); return; }
   L.popup().setLatLng(e.latlng).setContent('<div class="pp"><strong>' + esc(name) + '</strong><div class="sub">' + esc(muniLine(name)) + '</div><button type="button" class="linkbtn" data-act="pick-muni" data-m="' + esc(name) + '">List the schools</button></div>').openOn(map);
 }));
 
@@ -1842,13 +1878,13 @@ const ACT = {
   'prio-lvl': el => { prio.lvl = +el.value; if (prio.highlight) refresh(); rerender(); },
   'prio-min': el => { prio.minFlags = +el.value; if (prio.highlight) refresh(); rerender(); },
   'iheat': async el => {
-    const s = SBY[el.dataset.i]; if (!s) return;
-    const place = pagasaPlace(s), msg = document.getElementById('iheatmsg' + s.i);
+    const m = el.dataset.m, place = pagasaPlace({ m }), msg = document.getElementById('iheatmsg' + el.dataset.k);
     let copied = false;
     try { await navigator.clipboard.writeText(place); copied = true; } catch (e) { copied = false; }
     window.open(IHEAT_URL, '_blank', 'noopener');
-    if (msg) msg.innerHTML = (copied ? 'Copied <b>' + esc(place) + '</b>. In the PAGASA tab, click the search box and paste it (Ctrl+V).' : 'In the PAGASA tab, search for <b>' + esc(place) + '</b>.') + (s.x != null ? ' Coordinates of the school: ' + s.lat.toFixed(5) + ', ' + s.lon.toFixed(5) + '.' : '') + ' PAGASA shows the heat index by place, not by school.';
+    if (msg) msg.innerHTML = (copied ? 'Copied <b>' + esc(place) + '</b>. In the PAGASA tab, click the search box and paste it (Ctrl+V).' : 'In the PAGASA tab, search for <b>' + esc(place) + '</b>.') + ' Read the heat index for the hour you need. It is for the place, not for this school.';
   },
+  'open-class': () => { map.closePopup(); openSheet('Classroom heat index (DM 064, s. 2026)', renderClassroom); },
   'cls-live': () => updateClassroom(),
   'prio-zero': el => { prio.ignoreZero = el.checked; flagCache = null; refresh(); rerender(); },
   'prio-hi': el => { prio.highlight = el.checked; refresh(); },
@@ -1893,6 +1929,7 @@ document.addEventListener('change', e => {
   const tag = el.tagName, type = el.type;
   if (tag === 'INPUT' && (type === 'radio' || type === 'checkbox' || type === 'file') || tag === 'SELECT') { if (ACT[el.dataset.act]) ACT[el.dataset.act](el, e); }
 });
+$('tHeatMode').onclick = () => setHeatMode(!state.heat);
 $('tPriority').onclick = () => openSheet('Priority schools', renderPriority);
 $('tCompare').onclick = () => openSheet('Compare districts', renderCompare);
 $('tHazard').onclick = () => openSheet('Hazard exposure', renderHazard);
