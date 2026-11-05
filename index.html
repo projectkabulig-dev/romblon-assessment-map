@@ -1073,6 +1073,7 @@ function setSchools(r) {
   for (const s of D.schools) { SBY[s.i] = s; muniTotal[s.m] = (muniTotal[s.m] || 0) + 1; }
 }
 setSchools(buildSchools(D.rows));
+D.__placedSnap = D.schools.filter(x => x.x != null).length;
 
 /* ---------- map ---------- */
 const map = L.map('map', { zoomSnap: .25, zoomDelta: .5, preferCanvas: true });
@@ -1710,6 +1711,11 @@ async function loadLive(url) {
     if (j && j.error) throw new Error('The web app answered: ' + j.error);
     const rows = Array.isArray(j) ? j : j.rows;
     if (!Array.isArray(rows) || !rows.length) throw new Error('The link returned no rows. Check that the sheet is named Schools and has data.');
+    const keys = new Set(); rows.forEach(r => Object.keys(r).forEach(k => keys.add(k)));
+    const miss = ['school_id', 'school', 'district', 'municipality', 'lon', 'lat'].filter(k => !keys.has(k));
+    if (miss.length) throw new Error('The Sheet is missing these columns in row 1: ' + miss.join(', ') + '. Do not change the headings.');
+    const built = buildSchools(rows), placedNow = built.schools.filter(x => x.x != null).length, placedSnap = D.rows.length ? Math.round(0.5 * (D.__placedSnap || 0)) : 0;
+    if (D.__placedSnap && placedNow < placedSnap) throw new Error('Most schools in the Sheet have no valid location (' + placedNow + ' on the map, expected about ' + D.__placedSnap + '). Check the municipality, lon, and lat columns.');
     applyRows(rows, { mode: 'live', updated: j.updated || new Date().toISOString(), url }); return '';
   } catch (e) { return e.name === 'AbortError' ? 'The request timed out.' : (e.message === 'Failed to fetch' ? 'The link could not be reached. Check the link, that the web app is deployed with access for Anyone, and your internet connection.' : (e.message || String(e))); }
   finally { clearTimeout(t); }
