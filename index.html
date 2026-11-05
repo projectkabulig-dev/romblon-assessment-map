@@ -1737,7 +1737,11 @@ async function loadLive(url) {
     const miss = ['school_id', 'school', 'district', 'municipality', 'lon', 'lat'].filter(k => !keys.has(k));
     if (miss.length) throw new Error('The Sheet is missing these columns in row 1: ' + miss.join(', ') + '. Do not change the headings.');
     const built = buildSchools(rows), placedNow = built.schools.filter(x => x.x != null).length, placedSnap = D.rows.length ? Math.round(0.5 * (D.__placedSnap || 0)) : 0;
-    if (D.__placedSnap && placedNow < placedSnap) throw new Error('Most schools in the Sheet have no valid location (' + placedNow + ' on the map, expected about ' + D.__placedSnap + '). Check the municipality, lon, and lat columns.');
+    if (D.__placedSnap && placedNow < placedSnap) {
+      const why = {}; built.schools.forEach(x => { if (x.x == null) why[x.reason] = (why[x.reason] || 0) + 1; });
+      const ex = rows[0] || {}, shown = k => k + ' = ' + JSON.stringify(ex[k]);
+      throw new Error('Most schools in the Sheet have no valid location (' + placedNow + ' on the map, expected about ' + D.__placedSnap + '). Reasons: ' + Object.entries(why).map(([r, n]) => n + ' ' + r).join('; ') + '. First row: ' + ['municipality', 'lon', 'lat'].map(shown).join(', ') + '. Longitude should be about 122 and latitude about 12, as plain numbers with a decimal point.');
+    }
     applyRows(rows, { mode: 'live', updated: j.updated || new Date().toISOString(), url }); return '';
   } catch (e) { return e.name === 'AbortError' ? 'The request timed out.' : (e.message === 'Failed to fetch' ? 'The link could not be reached. Check the link, that the web app is deployed with access for Anyone, and your internet connection.' : (e.message || String(e))); }
   finally { clearTimeout(t); }
