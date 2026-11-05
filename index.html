@@ -724,6 +724,8 @@ details ul{padding-left:18px;margin:0 0 8px}
 .leaflet-popup-content{margin:12px 14px;font-size:13px;line-height:1.4}
 .pp strong{font-size:14.5px}
 .pp .sub{color:var(--ink2)}
+.heatlink{margin:8px 0 2px;padding-top:6px;border-top:1px solid var(--line)}
+.heatlink .mini{margin-bottom:3px}
 .pp .cur{margin:8px 0;padding:8px 10px;background:var(--mist);border-radius:6px;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .pp .cur b{font-size:16px;white-space:nowrap}
 .pp .more{max-height:190px;overflow:auto;border-top:1px solid var(--line);padding-top:6px}
@@ -1450,6 +1452,9 @@ function refresh() {
 
 /* ---------- popups ---------- */
 function chips(list, cls) { return list.map(t => '<span class="chip ' + (cls || '') + '">' + esc(t) + '</span>').join(''); }
+const IHEAT_URL = 'https://bagong.pagasa.dost.gov.ph/weather/heat-index';
+const pagasaPlace = s => String(s.m).replace(/\s*\([^)]*\)\s*/g, '').trim() + ', Romblon';
+const titleCase = t => String(t || '').toLowerCase().replace(/(^|[\s(-])([a-z\u00e0-\u00ff])/g, (m, a, b) => a + b.toUpperCase());
 function schoolPopup(s) {
   const v = VARS[state.variant], x = s.v[v.key];
   let h = '<div class="pp"><strong>' + esc(s.n) + '</strong>';
@@ -1469,6 +1474,7 @@ function schoolPopup(s) {
   }
   if (s.nn && Object.keys(s.nn).length) more += '<div class="g">Number of test takers</div>' + Object.entries(s.nn).map(([k, n]) => '<div class="kv"><span>' + esc(k) + '</span><span>' + n + '</span></div>').join('');
   h += more ? '<div class="more">' + more + '</div>' : '<div class="sub">No results in the files received.</div>';
+  h += '<div class="heatlink"><button type="button" class="mini" data-act="iheat" data-i="' + s.i + '">Check the heat index on PAGASA iHeatMAP</button><div class="sub" id="iheatmsg' + s.i + '">Opens PAGASA in a new tab and copies <b>' + esc(pagasaPlace(s)) + '</b> to paste in its search box.</div></div>';
   return h + '<button type="button" class="linkbtn" data-act="profile-school" data-i="' + s.i + '">Open profile</button></div>';
 }
 muniLayer.eachLayer(l => l.on('click', e => {
@@ -1835,6 +1841,14 @@ const ACT = {
   'prio-pct': el => { prio.pct = +el.value; if (prio.highlight) refresh(); rerender(); },
   'prio-lvl': el => { prio.lvl = +el.value; if (prio.highlight) refresh(); rerender(); },
   'prio-min': el => { prio.minFlags = +el.value; if (prio.highlight) refresh(); rerender(); },
+  'iheat': async el => {
+    const s = SBY[el.dataset.i]; if (!s) return;
+    const place = pagasaPlace(s), msg = document.getElementById('iheatmsg' + s.i);
+    let copied = false;
+    try { await navigator.clipboard.writeText(place); copied = true; } catch (e) { copied = false; }
+    window.open(IHEAT_URL, '_blank', 'noopener');
+    if (msg) msg.innerHTML = (copied ? 'Copied <b>' + esc(place) + '</b>. In the PAGASA tab, click the search box and paste it (Ctrl+V).' : 'In the PAGASA tab, search for <b>' + esc(place) + '</b>.') + (s.x != null ? ' Coordinates of the school: ' + s.lat.toFixed(5) + ', ' + s.lon.toFixed(5) + '.' : '') + ' PAGASA shows the heat index by place, not by school.';
+  },
   'cls-live': () => updateClassroom(),
   'prio-zero': el => { prio.ignoreZero = el.checked; flagCache = null; refresh(); rerender(); },
   'prio-hi': el => { prio.highlight = el.checked; refresh(); },
