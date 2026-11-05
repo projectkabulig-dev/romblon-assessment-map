@@ -851,6 +851,7 @@ details ul{padding-left:18px;margin:0 0 8px}
       <h2>Legend</h2>
       <div class="legend" id="legend" aria-live="polite"></div>
       <p class="small" id="coverage"></p>
+      <div id="heatMuni" hidden></div>
     </section>
 
     <section>
@@ -1379,6 +1380,14 @@ function renderRank(v, byD) {
   const none = D.districts.filter(d => !byD[d]);
   $('rankNone').textContent = none.length ? 'No data: ' + none.join(', ') + '.' : '';
 }
+function renderHeatMuni(v) {
+  const el = $('heatMuni');
+  if (!v.model || !modelHeat) { el.hidden = true; return; }
+  const rows = Object.entries(modelHeat.by).map(([m, o]) => ({ m, o })).sort((a, b) => b.o.hi - a.o.hi);
+  el.hidden = false;
+  el.innerHTML = '<div class="title">Heat index by municipality, estimated</div><ul class="rank">' + rows.map(r => { const c = heatCat(r.o.hi);
+    return '<li><button type="button" data-act="pick-muni" data-m="' + esc(r.m) + '" title="Air ' + r.o.t + ' \u00B0C, humidity ' + r.o.rh + '%"><span class="nm">' + esc(r.m) + '</span><span class="bar"><i style="width:' + Math.max(4, Math.min(100, 100 * r.o.hi / 60)).toFixed(0) + '%;background:' + c.bg + '"></i></span><span class="val">' + Math.round(r.o.hi) + ' \u00B0C</span></button></li>'; }).join('') + '</ul><p class="small">Click a municipality to see its schools. Hover to see air temperature and humidity.</p>';
+}
 function updateFilterBar() {
   const el = $('filterBar'); if (!el) return;
   const f = state.muni ? 'Showing schools in ' + state.muni + ' only' : state.district ? 'Showing schools in ' + state.district + ' district only' : '';
@@ -1390,7 +1399,7 @@ function restyle() { styleAll(); buildDots(VARS[state.variant]); }
 function refresh() {
   const { v, byD, vals } = compute();
   if (prio.highlight) prio.ids = new Set(prioArray().map(x => x.s.i));
-  styleAll(); buildDots(v); buildNames(); renderMuniList(v); renderLegend(v, vals); renderRank(v, byD); updateFilterBar();
+  styleAll(); buildDots(v); buildNames(); renderMuniList(v); renderLegend(v, vals); renderRank(v, byD); renderHeatMuni(v); updateFilterBar();
   if (v.model && !modelHeat && !modelLoading) loadModelHeat();
 }
 
