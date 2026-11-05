@@ -773,6 +773,12 @@ details ul{padding-left:18px;margin:0 0 8px}
 .tbl.cmp th[scope=row]{font-weight:600;white-space:nowrap}
 .muted{color:var(--ink2)}
 .nw{white-space:nowrap}
+.heat{border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:0 0 14px;background:var(--mist)}
+.heat .hhead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.heat .hbody{display:flex;align-items:center;gap:10px;margin:6px 0 2px}
+.heat .hval{font-size:26px;font-weight:700;letter-spacing:-.01em}
+.hcat{display:inline-block;padding:2px 9px;border-radius:10px;font-size:12.5px;font-weight:650}
+.heat p{margin:4px 0 0}
 .sortbtn,.linkbtn{font:inherit;color:#0d5f7a;background:none;border:0;padding:0;cursor:pointer;text-align:inherit;font-weight:600}
 .sortbtn{text-decoration:none}
 .linkbtn{text-decoration:underline;display:inline-block;margin-top:6px}
@@ -820,6 +826,7 @@ details ul{padding-left:18px;margin:0 0 8px}
     <p class="lede">Schools Division of Romblon. The color of each municipality shows the average result of its schools. Each dot is a school.</p>
 
     <p class="small" id="dataStatus"></p>
+    <div class="heat" id="heatCard" hidden></div>
 
     <section>
       <h2>What to show</h2>
@@ -911,6 +918,7 @@ details ul{padding-left:18px;margin:0 0 8px}
           <li>DUNT covers Grades 7 to 10 in SY 2026. Each domain is averaged across grades, and the DUNT average is the mean of the six domains.</li>
           <li>The change measure is ELLNA Numeracy 2026 minus 2024 in MPS points. It only includes schools with both years. Levels use the Proficient scale, so the two years are comparable.</li>
           <li>In RMA, some secondary schools show MPS 0 in every grade. This is probably missing data, so the Priority tool ignores RMA for those schools unless you turn the option off.</li>
+          <li>The heat index card is computed from the temperature and humidity of the PAGASA Romblon station. It is one point for the whole province and is not the official PAGASA heat index. The forecast line appears only if someone types it in the Heat tab of the Google Sheet.</li>
           <li>Landslide susceptibility was redrawn from a 55 m picture of the GeoRiskPH map (MGB, 2012), so it is approximate. A school's class is the most common one within about 165 m. Higher is worse, so it has no priority list.</li>
           <li>A school is called low on a measure when it is in the lowest 20% of schools with data, or Not or Low Proficient in RMA. This is a screening rule for planning, not a verdict on a school.</li>
         </ul>
@@ -1782,7 +1790,7 @@ const ACT = {
     if (/docs\.google\.com\/(spreadsheets|document)/.test(u) || /\/edit(\?|#|$)/.test(u)) { dataMsg = 'This is the link of the Sheet itself. The map needs the web app link you get from Deploy in Apps Script. It starts with https://script.google.com/macros/s/ and ends with /exec.'; rerender(); return; }
     if (!/^https?:\/\//i.test(u)) { dataMsg = 'The link must start with https://'; rerender(); return; }
     dataMsg = 'Loading...'; rerender(); const err = await loadLive(u);
-    if (err) dataMsg = 'Could not load live data. ' + err + ' ' + (live.mode === 'live' ? 'The data already shown has not changed.' : 'The embedded snapshot is still in use.'); else { setSaved(u); dataDraft = null; dataMsg = 'Loaded ' + D.schools.length + ' schools. The link is remembered in this browser only.'; }
+    if (err) dataMsg = 'Could not load live data. ' + err + ' ' + (live.mode === 'live' ? 'The data already shown has not changed.' : 'The embedded snapshot is still in use.'); else { loadHeat(u); setSaved(u); dataDraft = null; dataMsg = 'Loaded ' + D.schools.length + ' schools. The link is remembered in this browser only.'; }
     rerender();
   },
   'data-snap': () => { setSaved(''); dataDraft = ''; applyRows(D.rows, { mode: 'snapshot', updated: D.snapshot, url: '' }); dataMsg = 'Using the embedded snapshot.'; rerender(); },
@@ -1805,12 +1813,61 @@ $('tCompare').onclick = () => openSheet('Compare districts', renderCompare);
 $('tHazard').onclick = () => openSheet('Hazard exposure', renderHazard);
 $('tData').onclick = () => openSheet('Data source', renderData);
 
+/* ---------- heat index (PAGASA Romblon station) ---------- */
+function heatIndexC(tc, rh) {
+  const T = tc * 9 / 5 + 32; let hi = -42.379 + 2.04901523 * T + 10.14333127 * rh - 0.22475541 * T * rh - 0.00683783 * T * T - 0.05481717 * rh * rh + 0.00122874 * T * T * rh + 0.00085282 * T * rh * rh - 0.00000199 * T * T * rh * rh;
+  if (rh < 13 && T >= 80 && T <= 112) hi -= ((13 - rh) / 4) * Math.sqrt((17 - Math.abs(T - 95)) / 17);
+  else if (rh > 85 && T >= 80 && T <= 87) hi += ((rh - 85) / 10) * ((87 - T) / 5);
+  const simple = 0.5 * (T + 61 + (T - 68) * 1.2 + rh * 0.094);
+  if ((simple + T) / 2 < 80) hi = simple;
+  return (hi - 32) * 5 / 9;
+}
+const HEAT_CATS = [
+  { min: 52, label: 'Extreme danger', bg: '#b71c1c', fg: '#ffffff' }, { min: 42, label: 'Danger', bg: '#ef6c00', fg: '#ffffff' },
+  { min: 33, label: 'Extreme caution', bg: '#ffc266', fg: '#3b2400' }, { min: 27, label: 'Caution', bg: '#fff2a8', fg: '#3b2400' },
+  { min: -100, label: 'Not hazardous', bg: '#d7ecdc', fg: '#12303b' }];
+const heatCat = hi => HEAT_CATS.find(c => Math.round(hi) >= c.min);
+const heatCatChip = c => '<span class="hcat" style="background:' + c.bg + ';color:' + c.fg + '">' + c.label + '</span>';
+let heatBase = '', heatTimer = null;
+const heatUrl = base => base + (base.indexOf('?') >= 0 ? '&' : '?') + 'type=heat';
+function renderHeat(j, err) {
+  const el = $('heatCard'); el.hidden = false;
+  let body = '';
+  const a = j && j.aws;
+  if (a && a.temp_c != null && a.rh != null) {
+    const hi = heatIndexC(a.temp_c, a.rh), c = heatCat(hi);
+    const t = new Date(String(a.observed).replace(/,/g, '') + ' GMT+0800'), age = isNaN(t) ? null : (Date.now() - t.getTime()) / 36e5;
+    body += '<div class="hbody"><span class="hval">' + Math.round(hi) + ' \u00B0C</span>' + heatCatChip(c) + '</div>';
+    body += '<p class="small">Computed from ' + a.temp_c + ' \u00B0C and ' + a.rh + '% humidity at the PAGASA ' + esc(a.site) + ', observed ' + esc(a.observed) + '. This is not the official PAGASA heat index.' + (age !== null && age > 6 ? ' <b>This reading is about ' + Math.round(age) + ' hours old.</b>' : '') + '</p>';
+  } else if (a) body += '<p class="small">The station sent no temperature or humidity at ' + esc(a.observed) + '.</p>';
+  else body += '<p class="small">' + esc(err || (j && j.error) || 'No reading is available right now.') + '</p>';
+  if (j && j.forecast && Number.isFinite(j.forecast.heat_index_c)) { const f = j.forecast, c = heatCat(f.heat_index_c); body += '<p class="small">PAGASA forecast for ' + esc(f.date) + ': <b>' + f.heat_index_c + ' \u00B0C</b> ' + heatCatChip(c) + (f.note ? ' ' + esc(f.note) : '') + '</p>'; }
+  body += '<p class="small">Only one PAGASA station covers Romblon, so this describes Romblon town, not every school. <a href="https://bagong.pagasa.dost.gov.ph/weather/heat-index" target="_blank" rel="noopener">Official PAGASA heat index page</a></p>';
+  el.innerHTML = '<div class="hhead"><strong>Heat index, Romblon station</strong><button type="button" class="mini" id="heatRefresh">Refresh</button></div>' + body;
+  $('heatRefresh').onclick = () => loadHeat(heatBase);
+}
+async function loadHeat(base) {
+  if (!base) { $('heatCard').hidden = true; return; }
+  heatBase = base;
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 25000);
+  try {
+    const res = await fetch(heatUrl(base), { signal: ctl.signal, cache: 'no-store' });
+    if (!res.ok) throw new Error('The server answered ' + res.status + '.');
+    const j = await res.json();
+    if (!j || (j.aws === undefined && j.error === undefined)) throw new Error('The web app did not return heat index data. Update Code.gs in Apps Script to the latest version and deploy a new version.');
+    renderHeat(j);
+  } catch (e) { renderHeat(null, e.name === 'AbortError' ? 'The heat index request timed out.' : (e.message === 'Failed to fetch' ? 'The heat index could not be loaded.' : e.message)); }
+  finally { clearTimeout(t); }
+  if (!heatTimer) heatTimer = setInterval(() => { if (!document.hidden && heatBase) loadHeat(heatBase); }, 10 * 60 * 1000);
+}
+
 /* ---------- start ---------- */
 renderDataBits();
 refresh();
 (async function startLive() {
   const q = new URLSearchParams(location.search).get('data'), url = q || DATA_URL || getSaved();
   if (!url) return;
+  loadHeat(url);
   const err = await loadLive(url);
   if (err) { dataMsg = 'Could not load live data. ' + err + ' Showing the embedded snapshot.'; $('dataStatus').textContent = 'Data: live link failed, showing embedded snapshot of ' + D.snapshot + '.'; }
   else dataMsg = 'Loaded ' + D.schools.length + ' schools.';
