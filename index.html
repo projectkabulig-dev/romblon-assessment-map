@@ -729,6 +729,9 @@ details ul{padding-left:18px;margin:0 0 8px}
 .pp .g{font-weight:650;margin:6px 0 2px}
 .pp .kv{display:flex;justify-content:space-between;gap:10px;padding:1px 0}
 .pp .kv span:last-child{font-variant-numeric:tabular-nums;text-align:right}
+.bname{white-space:nowrap}
+.bname span{position:absolute;transform:translate(-50%,-50%);font-style:italic;font-weight:600;font-size:10.5px;color:#4a2b00;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff;pointer-events:none}
+#map.sat .bname span{color:#ffe8a3;text-shadow:0 0 3px #000,0 0 3px #000,0 0 2px #000}
 .sname{white-space:nowrap}
 .sname span{position:absolute;transform:translate(9px,-50%);max-width:190px;overflow:hidden;text-overflow:ellipsis;font-weight:600;font-size:11.5px;color:#12303b;text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 2px #fff;pointer-events:none}
 .sname.nodata span{font-weight:400;color:#46606a}
@@ -850,7 +853,7 @@ details ul{padding-left:18px;margin:0 0 8px}
         <label><input type="checkbox" id="cDots" checked> Schools</label>
         <label><input type="checkbox" id="cLabels" checked> Municipality names</label>
         <label><input type="checkbox" id="cNames" checked> School names</label>
-        <label><input type="checkbox" id="cBrgy"> Barangay boundaries</label>
+        <label><input type="checkbox" id="cBrgy"> Barangay boundaries and names</label>
         <label><input type="checkbox" id="cLs"> Landslide susceptibility (MGB 2012)</label>
       </div>
       <p class="small" style="margin:6px 0 0">School names appear when you zoom in close, or when you pick a municipality.</p>
@@ -1097,7 +1100,7 @@ function setBase(name) {
   currentBase = BASES[name];
   if (currentBase) currentBase.addTo(map).bringToBack();
   $('map').classList.toggle('sat', name === 'sat');
-  state.base = name;
+  state.base = name; brgyStyle();
   if (state.op == null) $('rOp').value = Math.round(opacityNow() * 100);
   restyle();
 }
@@ -1114,7 +1117,17 @@ const muniLayer = L.geoJSON(ADM3, {
     layer.on('mouseout', () => muniLayer.resetStyle(layer));
   }
 }).addTo(map);
-const brgyLayer = L.geoJSON(ADM4, { pane: 'brgyPane', interactive: false, style: { color: '#12303b', weight: .6, opacity: .5, fill: false } });
+const brgyBase = L.geoJSON(ADM4, { pane: 'brgyPane', interactive: false, style: { color: '#0b1f27', weight: 2, opacity: .4, fill: false } });
+const brgyTop = L.geoJSON(ADM4, { pane: 'brgyPane', interactive: false, style: { color: '#ffffff', weight: .9, opacity: .95, dashArray: '4 4', fill: false } });
+const brgyLayer = L.layerGroup([brgyBase, brgyTop]);
+const brgyStyle = () => { brgyBase.setStyle(state.base === 'sat' ? { color: '#000000', weight: 2.2, opacity: .55 } : { color: '#0b1f27', weight: 2, opacity: .4 }); };
+const brgyNames = L.layerGroup();
+for (const f of ADM4.features) brgyNames.addLayer(L.marker(f.properties.lp, { pane: 'labelPane', interactive: false, keyboard: false,
+  icon: L.divIcon({ className: 'bname', html: '<span>' + esc(f.properties.adm4_name) + '</span>', iconSize: null }) }));
+function updateBrgyNames() {
+  const on = state.brgy && map.getZoom() >= 12;
+  if (on && !map.hasLayer(brgyNames)) brgyNames.addTo(map); else if (!on && map.hasLayer(brgyNames)) map.removeLayer(brgyNames);
+}
 const labelLayer = L.layerGroup();
 for (const f of ADM3.features) {
   labelLayer.addLayer(L.marker(f.properties.lp, { pane: 'labelPane', interactive: false, keyboard: false,
@@ -1424,7 +1437,7 @@ $('cDots').onchange = e => { state.dots = e.target.checked; if (e.target.checked
 $('cNames').onchange = e => { state.names = e.target.checked; buildNames(); };
 $('cLabels').onchange = e => { state.labels = e.target.checked; e.target.checked ? labelLayer.addTo(map) : map.removeLayer(labelLayer); };
 $('cLs').onchange = e => { setLs(e.target.checked); };
-$('cBrgy').onchange = e => { state.brgy = e.target.checked; e.target.checked ? brgyLayer.addTo(map) : map.removeLayer(brgyLayer); };
+$('cBrgy').onchange = e => { state.brgy = e.target.checked; e.target.checked ? brgyLayer.addTo(map) : map.removeLayer(brgyLayer); updateBrgyNames(); };
 $('rOp').oninput = e => { state.op = e.target.value / 100; styleAll(); };
 document.querySelectorAll('input[name=base]').forEach(r => r.onchange = e => setBase(e.target.value));
 
@@ -1443,6 +1456,7 @@ function zoomSchool(s) {
   const m = markers[s.i]; if (m) setTimeout(() => m.openPopup(), 200);
 }
 map.on('moveend', buildNames);
+map.on('zoomend', updateBrgyNames);
 map.on('zoomend', () => { const r = radiusFor(map.getZoom()); for (const id in markers) { const m = markers[id]; m.setRadius(m.options.fillOpacity === 1 ? r : Math.max(2.5, r - 2)); } buildRings(); });
 
 function renderDataBits() {
