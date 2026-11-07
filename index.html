@@ -824,6 +824,10 @@ details ul{padding-left:18px;margin:0 0 8px}
   @page{size:A4;margin:12mm}
 }
 @media (max-width:860px){
+  .overlay{padding:0;align-items:flex-end}
+  .sheet{width:100%;max-height:92vh;border-radius:14px 14px 0 0}
+  .sheetbody .pp{font-size:14.5px}
+  .sheetbody .pp .more{max-height:none;overflow:visible}
   .app{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto;min-height:100vh}
   #map{order:-1;height:62vh}
   .panel{border-right:0;border-top:1px solid var(--line);overflow:visible}
@@ -1354,7 +1358,7 @@ function buildDots(v) {
     const modeOn = state.heat || state.land;
     const m = L.circleMarker([s.y, s.x], { renderer: dotRenderer, radius: (has || modeOn) ? radiusFor(z) + (hiLs ? 1.5 : 0) : Math.max(2.5, radiusFor(z) - 2), bonus: hiLs ? 1.5 : 0,
       fillColor: state.land ? (hiLs ? '#ffffff' : '#12303b') : dotColor(v, x), fillOpacity: (has || modeOn) ? 1 : .8, color: state.land ? (hiLs ? '#b2182b' : '#ffffff') : stroke, weight: state.land ? (hiLs ? 3.4 : 1.4) : (has ? 1.2 : .8) });
-    m.bindPopup(() => schoolPopup(s), { maxWidth: 340 });
+    m.bindPopup(() => schoolPopup(s), { maxWidth: 340, maxHeight: popupMaxH(), autoPanPaddingTopLeft: [70, 70], autoPanPaddingBottomRight: [20, 20] });
     m.bindTooltip(esc(s.n) + (state.land ? (lc !== undefined ? ': ' + ['Low', 'Moderate', 'High', 'Very High'][lc] : '') : (has && !state.heat ? ': ' + fmt(v, x) : '')), { direction: 'top', offset: [0, -4] });
     markers[s.i] = m; dotsLayer.addLayer(m);
   }
@@ -1567,9 +1571,9 @@ function schoolPopup(s) {
 }
 muniLayer.eachLayer(l => l.on('click', e => {
   const name = l.feature.properties.adm3_name;
-  if (state.heat) { L.popup({ maxWidth: 340 }).setLatLng(e.latlng).setContent(heatPopup(name, null)).openOn(map); return; }
-  if (state.land) { L.popup({ maxWidth: 340 }).setLatLng(e.latlng).setContent(landMuniPopup(name)).openOn(map); return; }
-  L.popup().setLatLng(e.latlng).setContent('<div class="pp"><strong>' + esc(name) + '</strong><div class="sub">' + esc(muniLine(name)) + '</div><button type="button" class="linkbtn" data-act="pick-muni" data-m="' + esc(name) + '">List the schools</button></div>').openOn(map);
+  if (state.heat) { L.popup({ maxWidth: 340, maxHeight: popupMaxH(), autoPanPaddingTopLeft: [70, 70] }).setLatLng(e.latlng).setContent(heatPopup(name, null)).openOn(map); return; }
+  if (state.land) { L.popup({ maxWidth: 340, maxHeight: popupMaxH(), autoPanPaddingTopLeft: [70, 70] }).setLatLng(e.latlng).setContent(landMuniPopup(name)).openOn(map); return; }
+  L.popup({ maxHeight: popupMaxH(), autoPanPaddingTopLeft: [70, 70] }).setLatLng(e.latlng).setContent('<div class="pp"><strong>' + esc(name) + '</strong><div class="sub">' + esc(muniLine(name)) + '</div><button type="button" class="linkbtn" data-act="pick-muni" data-m="' + esc(name) + '">List the schools</button></div>').openOn(map);
 }));
 
 /* ---------- controls ---------- */
@@ -1637,10 +1641,20 @@ function renderDataBits() {
 }
 
 /* ---------- sheet (modal) ---------- */
+const smallScreen = () => window.matchMedia('(max-width: 860px)').matches;
+const popupMaxH = () => Math.max(220, Math.min(560, map.getSize().y - 100));
+map.on('popupopen', e => {
+  if (!smallScreen()) return;
+  const node = e.popup._contentNode; if (!node) return;
+  const html = node.innerHTML, st = node.querySelector('strong'), title = st ? st.textContent : 'Details';
+  map.closePopup();
+  openSheet(title, () => { $('sheetBody').innerHTML = html; });
+  $('sheetPrint').hidden = true;
+});
 const sheet = { render: null, last: null };
 function openSheet(title, renderFn) {
   sheet.render = renderFn; sheet.last = document.activeElement;
-  $('sheetTitle').textContent = title; renderFn(); $('overlay').hidden = false;
+  $('sheetPrint').hidden = false; $('sheetTitle').textContent = title; renderFn(); $('overlay').hidden = false;
   $('sheetBody').scrollTop = 0; $('sheetClose').focus();
 }
 function closeSheet() { $('overlay').hidden = true; sheet.render = null; if (sheet.last && sheet.last.focus) sheet.last.focus(); }
